@@ -517,6 +517,10 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
             runner.quit()
 
     def spawn_run_time_quit_greenlet():
+        # gevent only updates its notion of the current time while the event loop is running. Everything done
+        # since the loop was created (importing the locustfile, loading test data, ...) is therefore not counted
+        # by new timers, which would make --run-time expire early.
+        gevent.get_hub().loop.update_now()
         gevent.spawn_later(options.run_time, stop_and_optionally_quit).link_exception(greenlet_exception_handler)
 
     headless_master_greenlet = None

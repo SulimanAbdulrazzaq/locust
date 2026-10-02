@@ -357,6 +357,50 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                     "locust: error: argument -s/--stop-timeout: Invalid time span format. Valid formats: 20, 20s, 3m, 2h, 1h20m, 3h30m10s, etc."
                 )
 
+    def test_run_time_is_counted_from_test_start_after_slow_startup(self):
+        # CPU bound work at import time (loading test data, heavy imports, ...) does not give gevent
+        # a chance to update its clock, so --run-time must not be measured from a stale loop time.
+        LOCUSTFILE_CONTENT = textwrap.dedent(
+            """
+            import time
+            from locust import User, task, constant, events
+
+            end = time.monotonic() + 1
+            while time.monotonic() < end:
+                pass
+
+
+            class TestUser(User):
+                wait_time = constant(0.1)
+
+                @task
+                def my_task(self):
+                    pass
+
+
+            started = []
+
+
+            @events.test_start.add_listener
+            def on_test_start(environment, **kwargs):
+                started.append(time.monotonic())
+
+
+            @events.test_stop.add_listener
+            def on_test_stop(environment, **kwargs):
+                print(f"TEST DURATION {time.monotonic() - started[0]:.2f}", flush=True)
+            """
+        )
+        with mock_locustfile(content=LOCUSTFILE_CONTENT) as mocked:
+            with TestProcess(
+                f"locust -f {mocked.file_path} --headless --users 1 --run-time 2s",
+                sigint_on_exit=False,
+                expect_timeout=8,
+            ) as tp:
+                tp.expect("TEST DURATION", stream="stdout")
+                durations = [float(line.split()[-1]) for line in tp.stdout_output if line.startswith("TEST DURATION")]
+                self.assertGreaterEqual(durations[0], 1.5)
+
     @unittest.skipIf(IS_WINDOWS, reason="Signal handling on windows is hard")
     def test_headless_spawn_options_wo_run_time(self):
         with mock_locustfile() as mocked:
