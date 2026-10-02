@@ -1,0 +1,51 @@
+name: s15-verify
+on: push
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Which tree is under test
+        run: git log -3 --format='%H %T %s'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Install locust (without building the web UI)
+        run: |
+          SKIP_PRE_BUILD=1 uv sync --group test
+          uv run python -c "import gevent; print('gevent', gevent.__version__, gevent.config.loop)"
+      - name: New test, 3 repetitions
+        run: |
+          for i in 1 2 3; do
+            uv run pytest locust/test/test_main.py -k test_run_time_is_counted_from_test_start_after_slow_startup -v -p no:cacheprovider
+          done
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Which tree is under test
+        run: git log -3 --format='%H %T %s'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Install locust (without building the web UI)
+        run: |
+          SKIP_PRE_BUILD=1 uv sync --group test
+      - name: New test
+        run: uv run pytest locust/test/test_main.py -k test_run_time_is_counted_from_test_start_after_slow_startup -v -p no:cacheprovider
