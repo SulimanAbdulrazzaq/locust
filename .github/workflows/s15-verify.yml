@@ -1,0 +1,71 @@
+name: s15-verify
+on: push
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Which tree is under test
+        run: git log -3 --format='%H %T %s'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: yarn
+          cache-dependency-path: locust/webui/yarn.lock
+      - uses: astral-sh/setup-uv@v5
+      - name: Build the web UI (needed by the web tests)
+        run: |
+          cd locust/webui
+          yarn install --frozen-lockfile
+          yarn build
+      - name: Install locust
+        run: |
+          SKIP_PRE_BUILD=1 uv sync --group test --group lint --extra otel
+          uv run python -c "import gevent; print('gevent', gevent.__version__, gevent.config.loop)"
+      - name: New test, 3 repetitions
+        run: |
+          for i in 1 2 3; do
+            uv run pytest locust/test/test_main.py -k test_run_time_is_counted_from_test_start_after_slow_startup -v -p no:cacheprovider
+          done
+      - name: Full locust test suite
+        run: uv run pytest locust/test -v -p no:cacheprovider
+      - name: examples/debugging_advanced.py (run by upstream CI after the tests)
+        run: PYTHONUNBUFFERED=1 uv run python examples/debugging_advanced.py | grep done
+      - name: Lint (same commands as upstream CI)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check
+          uv run mypy locust/
+          uv run typos .
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Which tree is under test
+        run: git log -3 --format='%H %T %s'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Install locust (without building the web UI)
+        run: |
+          SKIP_PRE_BUILD=1 uv sync --group test
+      - name: New test
+        run: uv run pytest locust/test/test_main.py -k test_run_time_is_counted_from_test_start_after_slow_startup -v -p no:cacheprovider
