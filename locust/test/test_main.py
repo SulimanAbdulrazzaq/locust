@@ -879,6 +879,30 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
             self.assertRegex(html_report_content, r'"end_time": "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"')
             self.assertRegex(html_report_content, r'"duration": "\d* seconds?"')
 
+    def test_html_report_option_creates_missing_directory(self):
+        with mock_locustfile() as mocked, TemporaryDirectory() as temp_dir:
+            html_report_file_path = os.path.join(temp_dir, "missing_directory", "report.html")
+
+            with TestProcess(
+                f"locust -f {mocked.file_path} --host https://test.com/ -u 1 -r 1 -t 1s --headless --exit-code-on-error 0 --html {html_report_file_path}",
+                sigint_on_exit=False,
+            ) as tp:
+                tp.expect("Shutting down (exit code 0)")
+
+            self.assertTrue(os.path.exists(html_report_file_path))
+
+    def test_csv_prefix_ending_with_slash_creates_directory(self):
+        with mock_locustfile() as mocked, TemporaryDirectory() as temp_dir:
+            csv_directory = os.path.join(temp_dir, "missing_directory")
+
+            with TestProcess(
+                f"locust -f {mocked.file_path} --host https://test.com/ -u 1 -r 1 -t 1s --headless --exit-code-on-error 0 --csv {csv_directory}{os.sep}",
+                sigint_on_exit=False,
+            ) as tp:
+                tp.expect("Shutting down (exit code 0)")
+
+            self.assertTrue(os.path.exists(os.path.join(csv_directory, "_stats.csv")))
+
     def test_run_with_userclass_picker(self):
         with temporary_file(content=MOCK_LOCUSTFILE_CONTENT_A) as file1:
             with temporary_file(content=MOCK_LOCUSTFILE_CONTENT_B) as file2:

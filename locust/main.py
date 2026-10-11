@@ -428,10 +428,8 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
             logger.debug("--run-time specified for a worker node will be ignored.")
 
     if options.csv_prefix:
-        base_csv_file = os.path.basename(options.csv_prefix)
-        base_csv_dir = options.csv_prefix[: -len(base_csv_file)]
-        if not os.path.exists(base_csv_dir) and len(base_csv_dir) != 0:
-            os.makedirs(base_csv_dir)
+        if base_csv_dir := os.path.dirname(options.csv_prefix):
+            os.makedirs(base_csv_dir, exist_ok=True)
         stats_csv_writer = stats.StatsCSVFileWriter(
             environment, stats.PERCENTILES_TO_REPORT, options.csv_prefix, options.stats_history_enabled
         )
@@ -673,6 +671,8 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
         html_report = get_html_report(environment, show_download_link=False)
         process_html_filename(options)
         logger.debug("Writing html report to file: %s", options.html_file)
+        if html_dir := os.path.dirname(options.html_file):
+            os.makedirs(html_dir, exist_ok=True)
         with open(options.html_file, "w", encoding="utf-8") as file:
             file.write(html_report)
 
